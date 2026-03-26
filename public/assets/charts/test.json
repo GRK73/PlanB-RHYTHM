@@ -1,0 +1,15 @@
+{
+  "meta": {
+    "title": "Test Song",
+    "artist": "Gemini",
+    "bpm": 120,
+    "offset": 0,
+    "roster": [0, 1, 2]
+  },
+  "notes": [
+    { "time": 1000, "lane": 0, "type": "normal", "characterId": 0 },
+    { "time": 1500, "lane": 1, "type": "normal", "characterId": 0 },
+    { "time": 2000, "lane": "any", "type": "switch", "targetCharId": 1 },
+    { "time": 2500, "lane": 0, "type": "normal", "characterId": 1 }
+  ]
+}
