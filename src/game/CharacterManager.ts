@@ -23,6 +23,14 @@ export class CharacterManager {
     return this.roster[this.currentIndex];
   }
 
+  public getActiveIndex(): number {
+    return this.currentIndex;
+  }
+
+  public getRosterSize(): number {
+    return this.roster.length;
+  }
+
   private switchNext() {
     this.currentIndex = (this.currentIndex + 1) % this.roster.length;
     console.log(`Switched to Character ID: ${this.getActiveCharacterId()}`);

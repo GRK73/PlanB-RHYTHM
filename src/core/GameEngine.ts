@@ -5,6 +5,7 @@ import { AudioManager } from './AudioManager';
 import { NoteManager } from '../game/NoteManager';
 import { JudgmentSystem } from '../game/JudgmentSystem';
 import { ChartData, ChartLoader } from '../game/ChartLoader';
+import { HUDManager } from '../game/HUDManager';
 
 export class GameEngine {
   public app: Application;
@@ -12,6 +13,7 @@ export class GameEngine {
   public audioManager: AudioManager;
   public noteManager: NoteManager | null = null;
   public judgmentSystem: JudgmentSystem | null = null;
+  public hudManager: HUDManager | null = null;
   
   private static instance: GameEngine;
   private container: HTMLElement | null = null;
@@ -47,10 +49,11 @@ export class GameEngine {
     InputManager.getInstance().init(container);
     this.noteManager = new NoteManager(this.gameLayer);
     this.judgmentSystem = new JudgmentSystem(this.characterManager, this.audioManager);
+    this.hudManager = new HUDManager(this.gameLayer, this.characterManager);
 
     this.app.ticker.add((ticker) => {
-      this.update(ticker.lastTime); // use total time if needed or delta
-      this.gameLoop();
+      this.update(ticker.lastTime);
+      this.gameLoop(ticker.deltaTime);
     });
   }
 
@@ -64,8 +67,8 @@ export class GameEngine {
     this.audioManager.play();
   }
 
-  private gameLoop() {
-    if (!this.chart || !this.noteManager) return;
+  private gameLoop(delta: number) {
+    if (!this.chart || !this.noteManager || !this.hudManager) return;
     
     const currentTime = this.audioManager.getCurrentTimeMS();
     
@@ -79,6 +82,7 @@ export class GameEngine {
     }
 
     this.noteManager.update(currentTime);
+    this.hudManager.update(delta);
   }
 
   private update(_time: number) {
