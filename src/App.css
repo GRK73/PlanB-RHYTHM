@@ -79,3 +79,28 @@
 .song-select {
   pointer-events: auto;
 }
+
+.settings-btn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, transform 0.2s;
+  backdrop-filter: blur(8px);
+}
+
+.settings-btn:hover {
+  background: rgba(255,255,255,0.2);
+  transform: rotate(45deg);
+}

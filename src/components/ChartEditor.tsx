@@ -10,6 +10,7 @@ const ChartEditor: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [zoom, setZoom] = useState(20); 
   const [selectedNoteType, setSelectedNoteType] = useState<NoteData['type'] | 'eraser'>('normal');
   const [selectedCharId, setSelectedCharId] = useState<number>(0);
+  const [oldBpm, setOldBpm] = useState<number>(97.5);
   
   const CHAR_DATA = [
     { id: 0, name: '빕어', color: '#cacdd1' },
@@ -23,6 +24,7 @@ const ChartEditor: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [metronomeOn, setMetronomeOn] = useState(false);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
@@ -34,6 +36,8 @@ const ChartEditor: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number | null>(null);
+  const playedNotesRef = useRef<Set<number>>(new Set());
+  const lastMetronomeBeatRef = useRef<number>(-1);
 
   const msPerBeat = (60 / bpm) * 1000;
   const gridStep = msPerBeat / 4; 
@@ -52,6 +56,8 @@ const ChartEditor: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         audioBufferRef.current = decoded;
       })
       .catch(e => console.error('Audio load failed:', e));
+
+
 
     return () => {
       if (sourceNodeRef.current) {
@@ -90,6 +96,47 @@ const ChartEditor: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         const scroll = scrollRef.current;
         if (x > scroll.scrollLeft + scroll.clientWidth * 0.7) scroll.scrollLeft = x - scroll.clientWidth * 0.3;
       }
+
+      // Play beep when notes pass the seeker
+      if (audioCtxRef.current) {
+        for (let i = 0; i < notes.length; i++) {
+          const note = notes[i];
+          if (note.time > timeMs) break;
+          if (note.time >= timeMs - 80 && !playedNotesRef.current.has(i)) {
+            playedNotesRef.current.add(i);
+            const ctx = audioCtxRef.current;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = note.lane === 0 ? 700 : 1000;
+            gain.gain.value = 0.3;
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            const dur = note.type === 'long' && note.duration ? note.duration / 1000 : 0.03;
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + dur);
+          }
+        }
+
+        // Metronome tick
+        if (metronomeOn) {
+          const currentBeat = Math.floor(timeMs / msPerBeat);
+          if (currentBeat > lastMetronomeBeatRef.current) {
+            lastMetronomeBeatRef.current = currentBeat;
+            const ctx = audioCtxRef.current;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.value = currentBeat % 4 === 0 ? 1800 : 1400;
+            gain.gain.value = 0.15;
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.02);
+          }
+        }
+      }
+
       requestRef.current = requestAnimationFrame(updateLoop);
     }
   };
@@ -114,6 +161,8 @@ const ChartEditor: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       pauseTimeRef.current += elapsed;
     } else {
       if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume();
+      playedNotesRef.current.clear();
+      lastMetronomeBeatRef.current = Math.floor((pauseTimeRef.current * 1000) / msPerBeat) - 1;
       
       const ctx = audioCtxRef.current;
       const source = ctx.createBufferSource();
@@ -153,6 +202,8 @@ const ChartEditor: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     } else {
       pauseTimeRef.current = newTimeSec;
     }
+    playedNotesRef.current.clear();
+    lastMetronomeBeatRef.current = Math.floor((newTimeSec * 1000) / msPerBeat) - 1;
     
     if (seekerRef.current) seekerRef.current.style.transform = `translateX(${timeToX(newTimeSec * 1000)}px)`;
     if (timeDisplayRef.current) timeDisplayRef.current.innerText = newTimeSec.toFixed(2) + 's';
@@ -271,6 +322,9 @@ const ChartEditor: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           {isPlaying ? 'STOP' : 'PLAY'}
         </button>
         <div className="time-display" ref={timeDisplayRef}>0.00s</div>
+        <button className={`metronome-btn ${metronomeOn ? 'active' : ''}`} onClick={() => setMetronomeOn(!metronomeOn)}>
+          🔔 METRONOME {metronomeOn ? 'ON' : 'OFF'}
+        </button>
         
         <div className="input-group">
           <label>Title</label>
@@ -321,6 +375,28 @@ const ChartEditor: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   onClick={() => { setSelectedNoteType('switch_down'); setPendingLongNote(null); }}>Wheel Down</button>
           <button className={`eraser-btn ${selectedNoteType === 'eraser' ? 'active' : ''}`} 
                   onClick={() => { setSelectedNoteType('eraser'); setPendingLongNote(null); }}>ERASER</button>
+        </div>
+        <div className="tool-group">
+          <p>BPM Recalculate</p>
+          <div className="input-group">
+            <label>Old BPM</label>
+            <input type="number" step="0.1" value={oldBpm} onChange={e => setOldBpm(Number(e.target.value))} />
+          </div>
+          <button className="snap-btn" onClick={() => {
+            const oldGrid = (60 / oldBpm) * 1000 / 4;
+            const newGrid = gridStep;
+            setNotes(prev => prev.map(n => {
+              const beatIndex = Math.round(n.time / oldGrid);
+              const newTime = beatIndex * newGrid;
+              let newDur = n.duration;
+              if (n.duration) {
+                const durBeats = Math.round(n.duration / oldGrid);
+                newDur = durBeats * newGrid;
+              }
+              return { ...n, time: newTime, duration: newDur && newDur > 0 ? newDur : n.duration };
+            }).sort((a, b) => a.time - b.time));
+            setOldBpm(bpm);
+          }}>RECALC</button>
         </div>
         <div className="file-ops">
           <button className="export-btn" onClick={exportJSON}>EXPORT JSON</button>
@@ -422,6 +498,8 @@ const ChartEditor: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         .play-btn { padding: 10px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 2px; flex-shrink: 0; }
         .play-btn.playing { background: #e74c3c; }
         .time-display { font-size: 1.2rem; font-family: monospace; text-align: center; color: #00d2ff; background: #111; padding: 5px; border-radius: 4px; }
+        .metronome-btn { padding: 7px; background: #3d3d3d; border: none; color: #aaa; cursor: pointer; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+        .metronome-btn.active { background: #e67e22; color: white; }
         .input-group { display: flex; flex-direction: column; gap: 2px; }
         .input-group label { font-size: 0.7rem; color: #888; text-transform: uppercase; font-weight: bold; }
         .input-group input { background: #3d3d3d; border: 1px solid #4d4d4d; color: white; padding: 5px; border-radius: 4px; font-size: 0.9rem; }

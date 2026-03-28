@@ -41,6 +41,10 @@ export class GameEngine {
     return GameEngine.instance;
   }
 
+  public setOffset(offset: number) {
+    this.audioManager.setOffset(offset);
+  }
+
   public async init(container: HTMLElement) {
     if (this.initialized || this.initializing) return;
     this.initializing = true;

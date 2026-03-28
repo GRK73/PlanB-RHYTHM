@@ -8,6 +8,7 @@ export class AudioManager {
   
   private sfxBuffers: Map<string, AudioBuffer> = new Map();
   private sfxVolume: number = 0.8;
+  private offset: number = 0;
 
   private constructor() {}
 
@@ -71,7 +72,11 @@ export class AudioManager {
 
   public getCurrentTimeMS(): number {
     if (!this.isPlaying || !this.audioContext) return 0;
-    return (this.audioContext.currentTime - this.startTime) * 1000;
+    return (this.audioContext.currentTime - this.startTime) * 1000 + this.offset;
+  }
+
+  public setOffset(ms: number) {
+    this.offset = ms;
   }
 
   public stop() {
